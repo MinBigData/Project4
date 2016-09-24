@@ -1,6 +1,7 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -24,6 +25,7 @@ public class Multiplication {
 	public static class MultiplicationMapper extends Mapper<LongWritable, Text, IntWritable, Text> {
 
 		Map<Integer, List<MovieRelation>> movieRelationMap = new HashMap<>();
+		Map<Integer, Integer> denominator = new HashMap<>();
 
 		@Override
 		protected void setup(Context context) throws IOException {
@@ -58,6 +60,14 @@ public class Multiplication {
 			}
 
 			br.close();
+			
+			for(Map.Entry<Integer, List<MovieRelation>> entry: movieRelationMap.entrySet()) {
+				int sum = 0;
+				for(MovieRelation relation: entry.getValue()) {
+					sum += relation.getRelation();
+				}
+				denominator.put(entry.getKey(), sum);
+			}
 		}
 
 		// map method
@@ -71,7 +81,9 @@ public class Multiplication {
 			double rating = Double.parseDouble(user_rating[1]);
 
 			for (MovieRelation relation : movieRelationMap.get(movie)) {
-				double score = rating * relation.getRelation();
+				double score = rating * relation.getRelation() / denominator.get(relation.getMovie2());
+				DecimalFormat df = new DecimalFormat("#.00");      
+				score = Double.valueOf(df.format(score));
 				context.write(new IntWritable(user), new Text(relation.getMovie2() + ":" + score));
 			}
 
@@ -83,25 +95,25 @@ public class Multiplication {
 		@Override
 		public void reduce(IntWritable key, Iterable<Text> values, Context context)
 				throws IOException, InterruptedException {
-			Map<Integer, Double> recommendList = new HashMap<>();
+			Map<Integer, Double> finalList = new HashMap<>();
 			// values: movieid:score
 			while (values.iterator().hasNext()) {
 				String[] movie_score = values.iterator().next().toString().trim().split(":");
 				int movie = Integer.parseInt(movie_score[0]);
 				double score = Double.parseDouble(movie_score[1]);
 
-				if (recommendList.containsKey(movie)) {
-					double curScore = recommendList.get(movie);
-					recommendList.put(movie, curScore + score);
+				if (finalList.containsKey(movie)) {
+					double curScore = finalList.get(movie);
+					finalList.put(movie, curScore + score);
 				} else {
-					recommendList.put(movie, score);
+					finalList.put(movie, score);
 				}
 			}
 
-			Iterator iter = recommendList.keySet().iterator();
+			Iterator iter = finalList.keySet().iterator();
 			while (iter.hasNext()) {
 				int movie = (int) iter.next();
-				double score = recommendList.get(movie);
+				double score = finalList.get(movie);
 				context.write(key, new Text(movie + ":" + score));
 			}
 		}
