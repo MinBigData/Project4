@@ -24,6 +24,15 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 public class Multiplication {
 	public static class MultiplicationMapper extends Mapper<LongWritable, Text, IntWritable, Text> {
 
+		/*
+		 * [movie1 {movie1, movie2, 8}{movie1, movie3, 5}{movie1, movie7, 6}]
+		 * [movie2 {movie2, movie1, 8}{movie2, movie5, 9}{movie2, movie9, 10}]
+		 * ....
+		 */
+		/*
+		 * {user 	movie:rating}
+		 */
+		
 		Map<Integer, List<MovieRelation>> movieRelationMap = new HashMap<>();
 		Map<Integer, Integer> denominator = new HashMap<>();
 
@@ -73,12 +82,11 @@ public class Multiplication {
 		// map method
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			String[] tokens = value.toString().trim().split("\t");
-			String[] user_rating = tokens[1].split(":");
+			String[] tokens = value.toString().trim().split(",");
 
-			int movie = Integer.parseInt(tokens[0]);
-			int user = Integer.parseInt(user_rating[0]);
-			double rating = Double.parseDouble(user_rating[1]);
+			int user = Integer.parseInt(tokens[0]);
+			int movie = Integer.parseInt(tokens[1]);
+			double rating = Double.parseDouble(tokens[2]);
 
 			for (MovieRelation relation : movieRelationMap.get(movie)) {
 				double score = rating * relation.getRelation() / denominator.get(relation.getMovie2());
