@@ -24,29 +24,32 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 public class RecommenderListGenerator {
 	public static class RecommenderListGeneratorMapper extends Mapper<LongWritable, Text, IntWritable, Text> {
 
-		public Map<Integer, List<Integer>> userWatchHistory = new HashMap<>();
-
+		//filter out watched movies
+		//match movie_name to movie_id
+		Map<Integer, List<Integer>> watchHistory = new HashMap<>();
+		
 		@Override
 		protected void setup(Context context) throws IOException {
-
-			Configuration conf = context.getConfiguration(); // -->/stopWords/stopWords.txt
+			//read movie watch history 
+			Configuration conf = context.getConfiguration();
 			String filePath = conf.get("watchHistory");
-
-			Path pt = new Path(filePath);// Location of file in HDFS
+			Path pt = new Path(filePath);
 			FileSystem fs = FileSystem.get(conf);
 			BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(pt)));
-			String line;
-			line = br.readLine();
-
-			while (line != null) {
-				int user = Integer.parseInt(line.split("\t")[0]);
-				String[] movies_rating = line.split("\t")[1].split(",");
-				List<Integer> movie_history = new ArrayList<>();
-				for (String cur : movies_rating) {
-					int movie = Integer.parseInt(cur.split(":")[0]);
-					movie_history.add(movie);
+			String line = br.readLine();
+			
+			//user,movie,rating
+			while(line != null) {
+				int user = Integer.parseInt(line.split(",")[0]);
+				int movie = Integer.parseInt(line.split(",")[1]);
+				if(watchHistory.containsKey(user)) {
+					watchHistory.get(user).add(movie);
 				}
-				userWatchHistory.put(user, movie_history);
+				else {
+					List<Integer> list = new ArrayList<>();
+					list.add(movie);
+					watchHistory.put(user, list);
+				}
 				line = br.readLine();
 			}
 			br.close();
@@ -54,37 +57,34 @@ public class RecommenderListGenerator {
 
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			String[] tokens = value.toString().trim().split("\t");
+			//recommender user \t movie:rating
+			String[] tokens = value.toString().split("\t");
 			int user = Integer.parseInt(tokens[0]);
 			int movie = Integer.parseInt(tokens[1].split(":")[0]);
-			double rating = Double.parseDouble(tokens[1].split(":")[1]);
-
-			if (!userWatchHistory.get(user).contains(movie)) {
-				context.write(new IntWritable(user), new Text(movie + ":" + rating));
+			if(!watchHistory.get(user).contains(movie)) {
+				context.write(new IntWritable(user), new Text(movie + ":" + tokens[1].split(":")[1]));
 			}
 		}
 	}
 
 	public static class RecommenderListGeneratorReducer extends Reducer<IntWritable, Text, IntWritable, Text> {
 
-		public Map<Integer, String> movieTitles = new HashMap<>();
-
+		Map<Integer, String> movieTitles = new HashMap<>();
+		//match movie_name to movie_id
 		@Override
 		protected void setup(Context context) throws IOException {
-
-			Configuration conf = context.getConfiguration(); // -->/stopWords/stopWords.txt
+			//<movie_id, movie_title>
+			//read movie title from file
+			Configuration conf = context.getConfiguration();
 			String filePath = conf.get("movieTitles");
-
-			Path pt = new Path(filePath);// Location of file in HDFS
+			Path pt = new Path(filePath);
 			FileSystem fs = FileSystem.get(conf);
 			BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(pt)));
-			String line;
-			line = br.readLine();
-
-			while (line != null) {
+			String line = br.readLine();
+			//movieid,movie_name
+			while(line != null) {
 				int movie_id = Integer.parseInt(line.trim().split(",")[0]);
-				String movie_name = line.trim().split(",")[1];
-				movieTitles.put(movie_id, movie_name);
+				movieTitles.put(movie_id, line.trim().split(",")[1]);
 				line = br.readLine();
 			}
 			br.close();
@@ -94,11 +94,12 @@ public class RecommenderListGenerator {
 		@Override
 		public void reduce(IntWritable key, Iterable<Text> values, Context context)
 				throws IOException, InterruptedException {
-			
+			//movie_id:rating
 			while(values.iterator().hasNext()) {
 				String cur = values.iterator().next().toString();
 				int movie_id = Integer.parseInt(cur.split(":")[0]);
 				String rating = cur.split(":")[1];
+				
 				context.write(key, new Text(movieTitles.get(movie_id) + ":" + rating));
 			}
 		}
@@ -120,7 +121,7 @@ public class RecommenderListGenerator {
 		job.setOutputFormatClass(TextOutputFormat.class);
 		job.setOutputKeyClass(IntWritable.class);
 		job.setOutputValueClass(Text.class);
-
+		
 		TextInputFormat.setInputPaths(job, new Path(args[2]));
 		TextOutputFormat.setOutputPath(job, new Path(args[3]));
 

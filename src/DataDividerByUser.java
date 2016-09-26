@@ -18,6 +18,7 @@ public class DataDividerByUser {
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
 
+			//input user,movie,rating
 			String[] user_movie_rating = value.toString().trim().split(",");
 			int userID = Integer.parseInt(user_movie_rating[0]);
 			String movieID = user_movie_rating[1];
@@ -37,7 +38,7 @@ public class DataDividerByUser {
 			while (values.iterator().hasNext()) {
 				sb.append("," + values.iterator().next());
 			}
-
+			//key = user value=movie1:rating, movie2:rating...
 			context.write(key, new Text(sb.toString().replaceFirst(",", "")));
 		}
 	}

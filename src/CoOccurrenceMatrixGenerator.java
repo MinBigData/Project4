@@ -17,19 +17,22 @@ public class CoOccurrenceMatrixGenerator {
 		// map method
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-
-			String[] user_movieRating = value.toString().trim().split("\t");
-			String[] movie_Ratings = user_movieRating[1].split(",");
-
-			for (int i = 0; i < movie_Ratings.length; i++) {
-				String movie1 = movie_Ratings[i].trim().split(":")[0];
-
-				for (int j = 0; j < movie_Ratings.length; j++) {
-					String movie2 = movie_Ratings[j].trim().split(":")[0];
+			//value = userid \t movie1: rating, movie2: rating...
+			//key = movie1: movie2 value = 1
+			String line = value.toString().trim();
+			String[] user_movieRatings = line.split("\t");
+			String user = user_movieRatings[0];
+			String[] movie_ratings = user_movieRatings[1].split(",");
+			//{movie1:rating, movie2:rating..}
+			for(int i = 0; i < movie_ratings.length; i++) {
+				String movie1 = movie_ratings[i].trim().split(":")[0];
+				
+				for(int j = 0; j < movie_ratings.length; j++) {
+					String movie2 = movie_ratings[j].trim().split(":")[0];
 					context.write(new Text(movie1 + ":" + movie2), new IntWritable(1));
 				}
 			}
-
+			
 		}
 	}
 
@@ -38,12 +41,12 @@ public class CoOccurrenceMatrixGenerator {
 		@Override
 		public void reduce(Text key, Iterable<IntWritable> values, Context context)
 				throws IOException, InterruptedException {
-
+			//key movie1:movie2 value = iterable<1, 1, 1>
 			int sum = 0;
-			while (values.iterator().hasNext()) {
+			while(values.iterator().hasNext()) {
 				sum += values.iterator().next().get();
 			}
-
+			
 			context.write(key, new IntWritable(sum));
 		}
 	}
@@ -51,11 +54,11 @@ public class CoOccurrenceMatrixGenerator {
 	public static void main(String[] args) throws Exception{
 		
 		Configuration conf = new Configuration();
-
+		
 		Job job = Job.getInstance(conf);
 		job.setMapperClass(MatrixGeneratorMapper.class);
 		job.setReducerClass(MatrixGeneratorReducer.class);
-
+		
 		job.setJarByClass(CoOccurrenceMatrixGenerator.class);
 		
 		job.setInputFormatClass(TextInputFormat.class);
@@ -67,5 +70,6 @@ public class CoOccurrenceMatrixGenerator {
 		TextOutputFormat.setOutputPath(job, new Path(args[1]));
 		
 		job.waitForCompletion(true);
+		
 	}
 }
